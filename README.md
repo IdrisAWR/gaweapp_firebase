@@ -1,4 +1,4 @@
-# 🌟 GaweeApp — Flutter Front-End Project
+# 🌟 GaweeApp — Flutter+Firebase Project
 
 ![Flutter](https://img.shields.io/badge/Flutter-11-blue?logo=flutter)
 ![License](https://img.shields.io/badge/License-MIT-green)
