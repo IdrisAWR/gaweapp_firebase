@@ -1,35 +1,107 @@
-// lib/create_account_screen.dart
+// lib/features/auth/create_account_screen.dart
 import 'package:flutter/material.dart';
-import 'package:coba_1/shared_widgets/custom_form_field.dart'; // Impor widget kustom kita
-import 'forgot_password_screen.dart'; // Impor halaman lupa password
+import 'package:coba_1/shared_widgets/custom_form_field.dart';
+import 'forgot_password_screen.dart';
 import 'package:coba_1/features/home/home_screen.dart';
+import 'package:coba_1/core/services/auth_service.dart';
 
-class CreateAccountScreen extends StatelessWidget {
-  const CreateAccountScreen({Key? key}) : super(key: key);
+class CreateAccountScreen extends StatefulWidget {
+  final String role; // 'job_seeker' atau 'company' (Diterima dari Login Screen)
+  
+  const CreateAccountScreen({Key? key, this.role = 'job_seeker'}) : super(key: key);
+
+  @override
+  _CreateAccountScreenState createState() => _CreateAccountScreenState();
+}
+
+class _CreateAccountScreenState extends State<CreateAccountScreen> {
+  final AuthService _authService = AuthService();
+  
+  // Controllers
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _nameController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  void _handleRegister() async {
+    // Validasi sederhana
+    if (_emailController.text.isEmpty || 
+        _nameController.text.isEmpty || 
+        _passwordController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please fill all fields")),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Panggil Service Register
+      await _authService.signUp(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+        name: _nameController.text.trim(),
+        role: widget.role, // Gunakan role yang dikirim dari halaman sebelumnya
+      );
+
+      // Jika sukses
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Registration Failed: $e")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     Color backgroundColor = const Color(0xFFF9F7FF);
     Color primaryColor = const Color(0xFF9634FF);
 
+    // Ubah judul tergantung role
+    String titleText = widget.role == 'company' 
+        ? "Create Company Account" 
+        : "Create an account";
+    
+    String nameHint = widget.role == 'company' 
+        ? "Company Name" 
+        : "Full Name";
+
     return Scaffold(
       backgroundColor: backgroundColor,
       body: SafeArea(
-        // Kita gunakan SingleChildScrollView agar tidak overflow saat keyboard muncul
         child: SingleChildScrollView(
           child: Padding(
             padding: const EdgeInsets.all(24.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 1. Logo Gawee di atas
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 40.0),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Image.asset(
-                        'assets/images/gawee.png', // Logo dengan teks
+                        'assets/images/gawee.png',
                         width: 200,
                       ),
                       const SizedBox(width: 20),
@@ -37,11 +109,9 @@ class CreateAccountScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 10),
-
-                // 2. Teks "Create an account"
-                const Text(
-                  "Create an account",
-                  style: TextStyle(
+                Text(
+                  titleText,
+                  style: const TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
                     color: Colors.black87,
@@ -49,51 +119,45 @@ class CreateAccountScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 30),
 
-                // 3. Form Fields
-                const CustomFormField(
+                CustomFormField(
                   hintText: "Email Address",
+                  controller: _emailController,
                 ),
                 const SizedBox(height: 20),
-                const CustomFormField(
-                  hintText: "User Name",
+                CustomFormField(
+                  hintText: nameHint,
+                  controller: _nameController,
                 ),
                 const SizedBox(height: 20),
-                const CustomFormField(
+                CustomFormField(
                   hintText: "Password",
                   obscureText: true,
+                  controller: _passwordController,
                 ),
                 const SizedBox(height: 30),
 
-                // 4. Tombol Submit
-                ElevatedButton(
-                  onPressed: () {
-                    // Ganti logika ini
-                    Navigator.pushReplacement( // Langsung ke HomeScreen
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const HomeScreen(),
+                _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : ElevatedButton(
+                        onPressed: _handleRegister,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryColor,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Text(
+                          "SUBMIT",
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
                       ),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: const Text(
-                    "SUBMIT",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
                 const SizedBox(height: 20),
 
-                // 5. Link "Forgot Password"
                 GestureDetector(
                   onTap: () {
                     Navigator.push(
@@ -121,11 +185,8 @@ class CreateAccountScreen extends StatelessWidget {
                   ),
                 ),
                 
-                // Kita tambahkan Spacer agar tombol Sign In terdorong ke bawah
-                // jika layarnya cukup tinggi
                 const SizedBox(height: 60), 
 
-                // 6. Link "Sign In"
                 Center(
                   child: Text(
                     "Already have an account",

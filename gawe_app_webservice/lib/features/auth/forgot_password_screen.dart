@@ -1,9 +1,62 @@
 // lib/forgot_password_screen.dart
 import 'package:flutter/material.dart';
-import 'package:coba_1/shared_widgets/custom_form_field.dart'; // Impor widget kustom kita
+import 'package:coba_1/shared_widgets/custom_form_field.dart';
+import 'package:coba_1/core/services/auth_service.dart'; // 1. Import Service
 
-class ForgotPasswordScreen extends StatelessWidget {
+class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({Key? key}) : super(key: key);
+
+  @override
+  _ForgotPasswordScreenState createState() => _ForgotPasswordScreenState();
+}
+
+class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
+  // 2. Siapkan Controller dan Service
+  final TextEditingController _emailController = TextEditingController();
+  final AuthService _authService = AuthService();
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  // 3. Logika Reset Password
+  void _handleResetPassword() async {
+    if (_emailController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter your email address")),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      await _authService.resetPassword(_emailController.text.trim());
+      
+      if (mounted) {
+        // Tampilkan pesan sukses
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Reset link sent! Check your email."),
+            backgroundColor: Colors.green,
+          ),
+        );
+        // Opsional: Kembali ke halaman login setelah sukses
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: ${e.toString()}")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +78,7 @@ class ForgotPasswordScreen extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Image.asset(
-                      'assets/images/gawee.png', // Logo dengan teks
+                      'assets/images/gawee.png',
                       width: 200,
                     ),
                     const SizedBox(width: 10),
@@ -45,39 +98,40 @@ class ForgotPasswordScreen extends StatelessWidget {
               ),
               const SizedBox(height: 30),
 
-              // 3. Email Field
-              const CustomFormField(
+              // 3. Email Field (Pasang Controller)
+              CustomFormField(
                 hintText: "Email Address",
+                controller: _emailController, // <--- Pasang controller
               ),
               const SizedBox(height: 30),
 
               // 4. Tombol Submit
-              ElevatedButton(
-                onPressed: () {
-                  // Tambahkan logika submit email di sini
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryColor,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                child: const Text(
-                  "SUBMIT",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-              const Spacer(), // Mendorong teks di bawah ke dasar
+              _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : ElevatedButton(
+                      onPressed: _handleResetPassword, // <--- Panggil fungsi
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: const Text(
+                        "SUBMIT",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+              const Spacer(),
 
               // 5. Teks "Login here"
               GestureDetector(
                 onTap: () {
-                  Navigator.pop(context); // Kembali ke halaman Login
+                  Navigator.pop(context);
                 },
                 child: RichText(
                   textAlign: TextAlign.center,

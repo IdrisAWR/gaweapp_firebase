@@ -1,11 +1,19 @@
-// lib/available_jobs_screen.dart
+// lib/features/job/available_jobs_screen.dart
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:coba_1/features/job/widgets/apply_job_sheet.dart';
-import 'package:coba_1/shared_widgets/app_drawer.dart'; // <-- 1. Impor Drawer
-import 'gallery_screen.dart'; // <-- 1. Impor Halaman Galeri BARU
+import 'package:coba_1/features/job/add_job_screen.dart'; // Import AddJobScreen untuk Edit
+import 'package:coba_1/core/services/job_service.dart'; // Import Service untuk Delete
+import 'package:coba_1/shared_widgets/app_drawer.dart';
+import 'package:coba_1/features/job/applicants_screen.dart';
+import 'gallery_screen.dart'; 
+import 'package:coba_1/core/models/job_model.dart'; 
 
 class AvailableJobsScreen extends StatefulWidget {
-  const AvailableJobsScreen({Key? key}) : super(key: key);
+  final JobModel job; 
+
+  const AvailableJobsScreen({Key? key, required this.job}) : super(key: key);
 
   @override
   _AvailableJobsScreenState createState() => _AvailableJobsScreenState();
@@ -15,23 +23,81 @@ class _AvailableJobsScreenState extends State<AvailableJobsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool _isBookmarked = false;
-
-  // 2. Tambahkan Global Key
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final JobService _jobService = JobService();
+  
+  String _userRole = "job_seeker";
+  bool _isOwner = false; // Penanda apakah user adalah pemilik loker ini
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() => setState(() {}));
+    _checkUserStatus();
+  }
 
-    // Hapus semua kode galeri dari initState
+  void _checkUserStatus() async {
+    User? currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      // 1. Cek Role
+      DocumentSnapshot doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+      
+      // 2. Cek Kepemilikan (Apakah ID User == Company ID di Job?)
+      bool isOwnerCheck = currentUser.uid == widget.job.companyId;
+
+      if (mounted) {
+        setState(() {
+          _userRole = doc['role'] ?? "job_seeker";
+          _isOwner = isOwnerCheck;
+        });
+      }
+    }
+  }
+
+  // --- FUNGSI DELETE ---
+  void _confirmDelete() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Delete Job"),
+        content: const Text("Are you sure you want to delete this job posting?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          TextButton(
+            onPressed: () async {
+              await _jobService.deleteJob(widget.job.jobId);
+              if (mounted) {
+                Navigator.pop(context); // Tutup Dialog
+                Navigator.pop(context); // Kembali ke Home
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Job deleted successfully")),
+                );
+              }
+            },
+            child: const Text("Delete", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- FUNGSI EDIT ---
+  void _navigateToEdit() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddJobScreen(jobToEdit: widget.job), // Kirim data job
+      ),
+    );
   }
 
   @override
   void dispose() {
     _tabController.dispose();
-    // Hapus semua kode galeri dari dispose
     super.dispose();
   }
 
@@ -44,7 +110,7 @@ class _AvailableJobsScreenState extends State<AvailableJobsScreen>
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(context).viewInsets.bottom,
         ),
-        child: const ApplyJobSheet(),
+        child: ApplyJobSheet(job: widget.job),
       ),
     );
   }
@@ -56,7 +122,6 @@ class _AvailableJobsScreenState extends State<AvailableJobsScreen>
     final Color subtitleColor = Theme.of(context).hintColor;
 
     return Scaffold(
-      // 3. Tambahkan Key dan Drawer
       key: _scaffoldKey,
       drawer: const AppDrawer(),
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -69,20 +134,50 @@ class _AvailableJobsScreenState extends State<AvailableJobsScreen>
           children: [
             Image.asset('assets/images/cosax.png', width: 40),
             const SizedBox(width: 10),
-            Text(
-              "Cosax Studios",
-              style: TextStyle(color: titleColor, fontWeight: FontWeight.bold),
+            Expanded( // Agar teks tidak overflow
+              child: Text(
+                widget.job.companyName, 
+                style: TextStyle(color: titleColor, fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),
         actions: [
-          // 4. Hubungkan tombol drawer
-          IconButton(
-            icon: Icon(Icons.more_vert, color: subtitleColor),
-            onPressed: () {
-              _scaffoldKey.currentState?.openDrawer();
-            },
-          ),
+          // --- LOGIKA ACTIONS BAR ---
+          if (_isOwner) ...[
+            // 1. TOMBOL LIHAT PELAMAR (BARU)
+            IconButton(
+              icon: const Icon(Icons.people_alt_outlined, color: Colors.green),
+              tooltip: "View Applicants",
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ApplicantsScreen(job: widget.job),
+                  ),
+                );
+              },
+            ),
+            // 2. Tombol Edit
+            IconButton(
+              icon: const Icon(Icons.edit, color: Colors.blue),
+              onPressed: _navigateToEdit,
+            ),
+            // 3. Tombol Hapus
+            IconButton(
+              icon: const Icon(Icons.delete, color: Colors.red),
+              onPressed: _confirmDelete,
+            ),
+          ] else ...[
+            // Jika Bukan Owner
+            IconButton(
+              icon: Icon(Icons.more_vert, color: subtitleColor),
+              onPressed: () {
+                _scaffoldKey.currentState?.openDrawer();
+              },
+            ),
+          ]
         ],
       ),
       body: SingleChildScrollView(
@@ -99,7 +194,7 @@ class _AvailableJobsScreenState extends State<AvailableJobsScreen>
             ),
             const SizedBox(height: 20),
             Text(
-              "Software Engineer",
+              widget.job.jobTitle, 
               style: TextStyle(
                 color: titleColor,
                 fontSize: 24,
@@ -108,7 +203,7 @@ class _AvailableJobsScreenState extends State<AvailableJobsScreen>
             ),
             const SizedBox(height: 5),
             Text(
-              "Medan, Indonesia",
+              widget.job.location, 
               style: TextStyle(color: subtitleColor, fontSize: 16),
             ),
             const SizedBox(height: 20),
@@ -116,8 +211,8 @@ class _AvailableJobsScreenState extends State<AvailableJobsScreen>
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  "\$500 - \$1,000",
-                  style: TextStyle(
+                  widget.job.salaryRange, 
+                  style: const TextStyle(
                     color: Colors.black,
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -142,21 +237,21 @@ class _AvailableJobsScreenState extends State<AvailableJobsScreen>
             ),
             const SizedBox(height: 20),
             [
-              _buildJobDescriptionTab(titleColor, subtitleColor), // Tab 1
-              _buildOurGalleryTab(titleColor), // Tab 2
+              _buildJobDescriptionTab(titleColor, subtitleColor), 
+              _buildOurGalleryTab(titleColor), 
             ][_tabController.index],
           ],
         ),
       ),
-      bottomNavigationBar: _buildBottomBar(
-        context,
-        primaryColor,
-        subtitleColor,
-      ),
+      
+      // Hanya tampilkan tombol Apply jika role == 'job_seeker'
+      bottomNavigationBar: _userRole == 'job_seeker' 
+          ? _buildBottomBar(context, primaryColor, subtitleColor)
+          : null, 
     );
   }
 
-  // (Widget _buildTag, _buildJobDescriptionTab, _buildRequirementRow, _buildBottomBar tetap sama)
+  // ... (Widget _buildTag, _buildJobDescriptionTab, _buildRequirementRow, _buildBottomBar, _buildOurGalleryTab SAMA SEPERTI SEBELUMNYA)
   Widget _buildTag(String text, Color primaryColor) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -181,7 +276,7 @@ class _AvailableJobsScreenState extends State<AvailableJobsScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
+          widget.job.description,
           style: TextStyle(color: subtitleColor, fontSize: 15, height: 1.5),
         ),
         const SizedBox(height: 20),
@@ -194,16 +289,10 @@ class _AvailableJobsScreenState extends State<AvailableJobsScreen>
           ),
         ),
         const SizedBox(height: 20),
-        Text(
-          "Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in",
-          style: TextStyle(color: subtitleColor, fontSize: 15, height: 1.5),
-        ),
-        const SizedBox(height: 20),
-        _buildRequirementRow("Sed ut perspiciatis unde omnis", subtitleColor),
-        _buildRequirementRow("Doloremque laudantium", subtitleColor),
-        _buildRequirementRow("Ipsa quae ab illo inventore", subtitleColor),
-        _buildRequirementRow("Architecto beatae vitae dicta", subtitleColor),
-        _buildRequirementRow("Sunt explicabo", subtitleColor),
+        if (widget.job.requirements.isNotEmpty)
+          ...widget.job.requirements.map((req) => _buildRequirementRow(req, subtitleColor)).toList()
+        else
+          Text("No specific requirements.", style: TextStyle(color: subtitleColor)),
       ],
     );
   }
@@ -231,11 +320,7 @@ class _AvailableJobsScreenState extends State<AvailableJobsScreen>
     );
   }
 
-  Widget _buildBottomBar(
-    BuildContext context,
-    Color primaryColor,
-    Color subtitleColor,
-  ) {
+  Widget _buildBottomBar(BuildContext context, Color primaryColor, Color subtitleColor) {
     return Container(
       padding: EdgeInsets.fromLTRB(
         24,
@@ -310,11 +395,9 @@ class _AvailableJobsScreenState extends State<AvailableJobsScreen>
     );
   }
 
-  // 5. Kembalikan fungsi ini menjadi tombol
   Widget _buildOurGalleryTab(Color titleColor) {
     return GestureDetector(
       onTap: () {
-        // Navigasi ke halaman galeri baru
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => const GalleryScreen()),

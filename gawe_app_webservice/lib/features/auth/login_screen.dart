@@ -1,9 +1,10 @@
-// lib/login_screen.dart
+// lib/features/auth/login_screen.dart
 import 'package:flutter/material.dart';
-import 'package:coba_1/shared_widgets/custom_form_field.dart';        // Impor widget kustom
-import 'forgot_password_screen.dart';   // Impor halaman lupa password
-import 'create_account_screen.dart';    // Impor halaman registrasi
-import 'package:coba_1/features/home/home_screen.dart';     // Impor placeholder home
+import 'package:coba_1/shared_widgets/custom_form_field.dart';
+import 'forgot_password_screen.dart';
+import 'create_account_screen.dart';
+import 'package:coba_1/features/home/home_screen.dart';
+import 'package:coba_1/core/services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   final int initialTabIndex; // 0 untuk Job Seeker, 1 untuk Company
@@ -16,6 +17,14 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final AuthService _authService = AuthService();
+
+  // Controllers
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  
+  bool _isLoading = false;
+
   Color primaryColor = const Color(0xFF9634FF);
   Color secondaryColor = const Color(0xFF569AFF);
   Color backgroundColor = const Color(0xFFF9F7FF);
@@ -33,7 +42,70 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   @override
   void dispose() {
     _tabController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
+  }
+
+  // --- FUNGSI LOGIN EMAIL BIASA ---
+  void _handleLogin() async {
+    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please fill all fields")),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      await _authService.signIn(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: ${e.toString()}")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // --- FUNGSI LOGIN GOOGLE (BARU) ---
+  void _handleGoogleLogin() async {
+    setState(() => _isLoading = true);
+    try {
+      // Tentukan role berdasarkan tab yang sedang aktif
+      // Index 0 = Job Seeker, Index 1 = Company
+      String role = _tabController.index == 0 ? 'job_seeker' : 'company';
+      
+      await _authService.signInWithGoogle(role: role);
+
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Google Sign In Failed: $e")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -43,14 +115,13 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       body: SafeArea(
         child: Column(
           children: [
-            // 1. Logo Gawee di atas
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 40.0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Image.asset(
-                    'assets/images/gawee.png', // Logo dengan teks
+                    'assets/images/gawee.png',
                     width: 200,
                   ),
                   const SizedBox(width: 10),
@@ -58,7 +129,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               ),
             ),
             
-            // 2. TabBar (Job Seeker & Company)
             TabBar(
               controller: _tabController,
               labelColor: primaryColor,
@@ -75,13 +145,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               ],
             ),
             
-            // 3. Konten Tab
             Expanded(
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  _buildJobSeekerTab(context), // Tampilan Gambar 4
-                  _buildCompanyTab(context),   // Tampilan Gambar 5
+                  _buildJobSeekerTab(context),
+                  _buildCompanyTab(context),
                 ],
               ),
             ),
@@ -91,7 +160,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     );
   }
 
-  // --- Widget untuk TAB JOB SEEKER (Gambar 4) ---
   Widget _buildJobSeekerTab(BuildContext context) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24.0),
@@ -104,18 +172,15 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             style: TextStyle(fontSize: 26,fontWeight: FontWeight.bold, color: Colors.black),
           ),
           const SizedBox(height: 20),
-          const CustomFormField(hintText: "User Name"),
+          CustomFormField(hintText: "Email Address", controller: _emailController),
           const SizedBox(height: 20),
-          const CustomFormField(hintText: "Password", obscureText: true),
+          CustomFormField(hintText: "Password", obscureText: true, controller: _passwordController),
           const SizedBox(height: 30),
-          _buildLoginButton(
-            "LOGIN",
-            primaryColor,
-            () => Navigator.pushReplacement( // Ganti tujuannya
-              context,
-              MaterialPageRoute(builder: (context) => const HomeScreen()),
-            ),
-          ),
+          
+          _isLoading 
+            ? const Center(child: CircularProgressIndicator()) 
+            : _buildLoginButton("LOGIN", primaryColor, _handleLogin),
+
           const SizedBox(height: 20),
           GestureDetector(
             onTap: () => Navigator.push(
@@ -142,8 +207,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _buildSocialButton('assets/images/google.png', () {}),
+              // TOMBOL GOOGLE DISINI
+              _buildSocialButton('assets/images/google.png', _handleGoogleLogin),
               const SizedBox(width: 20),
+              // TOMBOL FACEBOOK (Sementara kosong dulu)
               _buildSocialButton('assets/images/facebook.png', () {}),
             ],
           ),
@@ -151,7 +218,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           OutlinedButton(
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const CreateAccountScreen()),
+              MaterialPageRoute(builder: (context) => const CreateAccountScreen(role: 'job_seeker')),
             ),
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 16),
@@ -160,11 +227,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             ),
             child: Text(
               "CREATE ACCOUNT",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: primaryColor,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: primaryColor),
             ),
           ),
         ],
@@ -172,7 +235,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     );
   }
 
-  // --- Widget untuk TAB COMPANY (Gambar 5) ---
   Widget _buildCompanyTab(BuildContext context) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24.0),
@@ -185,18 +247,41 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold,color: Colors.black),
           ),
           const SizedBox(height: 20),
-          const CustomFormField(hintText: "Company Id"),
+          CustomFormField(hintText: "Company Email", controller: _emailController),
           const SizedBox(height: 20),
-          const CustomFormField(hintText: "User Name"),
-          const SizedBox(height: 20),
-          const CustomFormField(hintText: "Password", obscureText: true),
+          CustomFormField(hintText: "Password", obscureText: true, controller: _passwordController),
           const SizedBox(height: 30),
-          _buildLoginButton(
-            "LOGIN",
-            primaryColor,
-            () => Navigator.pushReplacement( // Ganti tujuannya
+          
+          _isLoading 
+            ? const Center(child: CircularProgressIndicator()) 
+            : _buildLoginButton("LOGIN", primaryColor, _handleLogin),
+          
+           const SizedBox(height: 30),
+           const Center(child: Text("Or sign in with", style: TextStyle(color: Colors.grey))),
+           const SizedBox(height: 20),
+           Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // TOMBOL GOOGLE DISINI
+              _buildSocialButton('assets/images/google.png', _handleGoogleLogin),
+              const SizedBox(width: 20),
+              _buildSocialButton('assets/images/facebook.png', () {}),
+            ],
+          ),
+          const SizedBox(height: 30),
+           OutlinedButton(
+            onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const HomeScreen()),
+              MaterialPageRoute(builder: (context) => const CreateAccountScreen(role: 'company')),
+            ),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              side: BorderSide(color: primaryColor, width: 2),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: Text(
+              "REGISTER COMPANY",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: primaryColor),
             ),
           ),
         ],
@@ -204,7 +289,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     );
   }
 
-  // --- Widget Bantuan ---
   Widget _buildLoginButton(String text, Color color, VoidCallback onPressed) {
     return ElevatedButton(
       onPressed: onPressed,
@@ -215,11 +299,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       ),
       child: Text(
         text,
-        style: const TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          color: Colors.white,
-        ),
+        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
       ),
     );
   }

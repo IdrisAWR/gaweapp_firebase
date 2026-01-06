@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "427710320418",
+    "project_id": "gaweeapp-backend-ac3a1",
+    "storage_bucket": "gaweeapp-backend-ac3a1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:427710320418:android:d542a6b2560e1fdbd09f7b",
+        "android_client_info": {
+          "package_name": "com.gaweapp.mobilewebser"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "427710320418-g58fa9a7880e6c3ua0lkjvocrl97jktn.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.gaweapp.mobilewebser",
+            "certificate_hash": "a9f2aad48b981d5c3638688c738920bda8eb5ea3"
+          }
+        },
+        {
+          "client_id": "427710320418-614q0f0ugp1r6cut2flgc49sv8sdoh88.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCRv1uxc8CQA9XR9_Be5gHjRt4CBRCeUho"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "427710320418-614q0f0ugp1r6cut2flgc49sv8sdoh88.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "427710320418-89k6es13b197qctgj0me8340ba4gh83m.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.coba1"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

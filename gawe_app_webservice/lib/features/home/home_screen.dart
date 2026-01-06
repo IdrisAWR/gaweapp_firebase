@@ -1,12 +1,17 @@
-// lib/home_screen.dart
+// lib/features/home/home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:coba_1/shared_widgets/app_drawer.dart';
 import 'package:coba_1/core/theme_provider.dart';
+import 'package:coba_1/shared_widgets/company_logo_widget.dart';
 import 'package:coba_1/features/settings/widgets/color_palette_sheet.dart';
 import 'package:coba_1/features/job/recent_job_screen.dart';
-import 'package:coba_1/features/job/job_detail_screen.dart';
-
+import 'package:coba_1/features/job/available_jobs_screen.dart';
+import 'package:coba_1/features/job/add_job_screen.dart';
+import 'package:coba_1/core/services/job_service.dart';
+import 'package:coba_1/core/models/job_model.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -16,31 +21,40 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // Data State Bookmark (Tidak berubah)
-  final List<Map<String, dynamic>> featuredJobs = [
-    {'logo': 'assets/images/cosax.png', 'company': 'Cosax Studios', 'title': 'Software Engineer', 'location': 'Medan, Indonesia', 'salary': '\$500 - \$1000', 'isBookmarked': true},
-    {'logo': 'assets/images/cosax2.png', 'company': 'Cosax Studios', 'title': 'Senior Progammer', 'location': 'Medan, Indonesia', 'salary': '\$900 - \$1500', 'isBookmarked': false},
-    {'logo': 'assets/images/cosax3.png', 'company': 'Cosax Studios', 'title': 'UI/UX Designer', 'location': 'Medan, Indonesia', 'salary': '\$700 - \$1500', 'isBookmarked': false},
-  ];
-  final List<Map<String, dynamic>> recentJobs = [
-    {'logo': 'assets/images/cosax4.png', 'title': 'Junior Software Engineer', 'company': 'Medan, Indonesia', 'salary': '\$500 - \$1000', 'isBookmarked': false},
-    {'logo': 'assets/images/cosax3.png', 'title': 'Software Engineer', 'company': 'Medan, Indonesia', 'salary': '\$500 - \$1000', 'isBookmarked': true},
-    {'logo': 'assets/images/cosax2.png', 'title': 'Graphic Designer', 'company': 'Medan, Indonesia', 'salary': '\$500 - \$1000', 'isBookmarked': false},
-    {'logo': 'assets/images/cosax.png', 'title': 'Software Engineer', 'company': 'Medan, Indonesia', 'salary': '\$500 - \$1000', 'isBookmarked': true},
-  ];
-  void _navigateToDetail(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const JobDetailScreen()),
-    );
+  final JobService _jobService = JobService();
+  
+  // 1. Controller untuk Search
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = ""; // Menyimpan teks pencarian
+
+  // Variabel Role (untuk FAB)
+  String _userRole = "job_seeker"; 
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUserRole();
   }
 
-  void _toggleBookmark(List<Map<String, dynamic>> jobList, int index) {
-    setState(() {
-      jobList[index]['isBookmarked'] = !jobList[index]['isBookmarked'];
-    });
+  // Kita hanya fetch role sekali saja untuk logika tombol Post Job
+  void _fetchUserRole() async {
+    User? currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      var doc = await FirebaseFirestore.instance.collection('users').doc(currentUser.uid).get();
+      if (mounted && doc.exists) {
+        setState(() {
+          _userRole = doc['role'] ?? "job_seeker";
+        });
+      }
+    }
   }
-  
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   void _showColorPalette(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -52,60 +66,122 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
-    
-    // --- AMBIL WARNA ---
-    // 'primaryColor' dari tema (ungu konstan)
-    final Color primaryColor = Theme.of(context).primaryColor; 
-    // Warna Teks
+    final Color primaryColor = Theme.of(context).primaryColor;
     final Color titleColor = Theme.of(context).textTheme.bodyLarge!.color!;
     final Color subtitleColor = Theme.of(context).hintColor;
 
+    // Ambil User ID untuk Stream Header
+    User? currentUser = FirebaseAuth.instance.currentUser;
+
     return Scaffold(
-      // Latar belakang dari tema (sekarang dinamis dari palet)
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor, 
-      drawer: const AppDrawer(), 
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      drawer: const AppDrawer(),
       appBar: _buildAppBar(context, themeProvider),
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildHeader(titleColor, subtitleColor),
+            // 2. HEADER DINAMIS (REALTIME FOTO & NAMA)
+            if (currentUser != null)
+              StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore.instance.collection('users').doc(currentUser.uid).snapshots(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) return const SizedBox(); // Loading diam
+                  
+                  var data = snapshot.data!.data() as Map<String, dynamic>;
+                  String name = data['name'] ?? "User";
+                  String photoUrl = data['photo_url'] ?? "";
+
+                  return _buildHeader(titleColor, subtitleColor, name, photoUrl);
+                },
+              ),
+
+            // 3. SEARCH BAR AKTIF
             _buildSearchBar(),
-            _buildRecomendedBanner(), // <-- Akan pakai warna biru konstan
-            _buildStatsCards(),
-            _buildJobCategories(primaryColor), // <-- Akan pakai warna konstan
-            _buildSectionTitle("Featured Jobs", titleColor, primaryColor),
-            _buildFeaturedJobsList(),
-            _buildSectionTitle("Recent Jobs List", titleColor, primaryColor, () {
-              // Navigasi ke halaman baru
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const RecentJobScreen()),
-              );
-            }),
-            _buildRecentJobsList(),
-            const SizedBox(height: 5),
+
+            // Jika sedang mencari, sembunyikan Banner & Kategori agar fokus ke hasil
+            if (_searchQuery.isEmpty) ...[
+              _buildRecomendedBanner(),
+              _buildStatsCards(),
+              _buildJobCategories(primaryColor),
+              _buildSectionTitle("Featured Jobs", titleColor, primaryColor),
+              StreamBuilder<List<JobModel>>(
+                stream: _jobService.getJobs(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                  return _buildFeaturedJobsList(snapshot.data!.take(5).toList());
+                },
+              ),
+            ],
+
+            // 4. LIST JOB (TERINTEGRASI DENGAN SEARCH)
+            _buildSectionTitle(
+              _searchQuery.isEmpty ? "Recent Jobs List" : "Search Results", 
+              titleColor, 
+              primaryColor, 
+              () {
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const RecentJobScreen()));
+              }
+            ),
+            
+            StreamBuilder<List<JobModel>>(
+              stream: _jobService.getJobs(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                
+                List<JobModel> jobs = snapshot.data!;
+
+                // --- LOGIKA FILTER PENCARIAN ---
+                if (_searchQuery.isNotEmpty) {
+                  jobs = jobs.where((job) {
+                    final titleLower = job.jobTitle.toLowerCase();
+                    final companyLower = job.companyName.toLowerCase();
+                    final searchLower = _searchQuery.toLowerCase();
+                    return titleLower.contains(searchLower) || companyLower.contains(searchLower);
+                  }).toList();
+                }
+
+                if (jobs.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.all(20.0),
+                    child: Center(child: Text("No jobs found matching your search.")),
+                  );
+                }
+
+                return _buildRecentJobsList(jobs);
+              },
+            ),
+            const SizedBox(height: 80),
           ],
         ),
       ),
+      
+      floatingActionButton: _userRole == 'company' 
+          ? FloatingActionButton.extended(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const AddJobScreen()),
+                );
+              },
+              label: const Text("Post Job"),
+              icon: const Icon(Icons.add),
+              backgroundColor: const Color(0xFF9634FF),
+            )
+          : null,
     );
   }
 
   AppBar _buildAppBar(BuildContext context, ThemeProvider themeProvider) {
-    // AppBar sekarang diatur di 'app_theme.dart'
     return AppBar(
       actions: [
         IconButton(
           icon: Icon(Icons.palette_outlined, color: Theme.of(context).hintColor),
-          onPressed: () {
-            _showColorPalette(context); 
-          },
+          onPressed: () => _showColorPalette(context),
         ),
         IconButton(
           icon: Icon(
-            themeProvider.isDarkMode 
-              ? Icons.light_mode_outlined
-              : Icons.dark_mode_outlined,
+            themeProvider.isDarkMode ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
             color: Theme.of(context).hintColor,
           ),
           onPressed: () {
@@ -118,29 +194,39 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildHeader(Color titleColor, Color subtitleColor) {
+  // Update Header menerima data dinamis
+  Widget _buildHeader(Color titleColor, Color subtitleColor, String name, String photoUrl) {
+    
+    // Tentukan Image Provider (Network atau Asset)
+    ImageProvider imageProvider;
+    if (photoUrl.isNotEmpty) {
+      imageProvider = NetworkImage(photoUrl);
+    } else {
+      imageProvider = const AssetImage('assets/images/user1.jpg');
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text("Hello", style: TextStyle(color: subtitleColor, fontSize: 20)),
-              Text(
-                "Richard Brownlee",
-                style: TextStyle(
-                  color: titleColor,
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("Hello,", style: TextStyle(color: subtitleColor, fontSize: 20)),
+                Text(
+                  name, // Nama Realtime
+                  style: TextStyle(color: titleColor, fontSize: 26, fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-          const CircleAvatar(
+          CircleAvatar(
             radius: 30,
-            backgroundImage: AssetImage('assets/images/user1.jpg'), 
+            backgroundImage: imageProvider, // Foto Realtime
+            backgroundColor: Colors.grey.shade200,
           ),
         ],
       ),
@@ -156,39 +242,48 @@ class _HomeScreenState extends State<HomeScreen> {
           color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 5),
-            )
+            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 5))
           ]
         ),
         child: TextField(
+          controller: _searchController, // Hubungkan Controller
+          onChanged: (value) {
+            // Update UI setiap kali mengetik
+            setState(() {
+              _searchQuery = value;
+            });
+          },
           style: TextStyle(color: Theme.of(context).textTheme.bodyLarge!.color!),
           decoration: InputDecoration(
-            hintText: "Search job here...",
+            hintText: "Search job title or company...",
             hintStyle: TextStyle(color: Theme.of(context).hintColor.withOpacity(0.5)),
             border: InputBorder.none,
-            // --- PERUBAHAN DI SINI ---
-            // Ikon panah (bukan search)
-            suffixIcon: Icon(Icons.search, color: Theme.of(context).hintColor.withOpacity(0.5)),
+            suffixIcon: _searchQuery.isNotEmpty 
+              ? IconButton(
+                  icon: Icon(Icons.clear, color: Theme.of(context).hintColor),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() {
+                      _searchQuery = "";
+                    });
+                  },
+                )
+              : Icon(Icons.search, color: Theme.of(context).hintColor.withOpacity(0.5)),
           ),
         ),
       ),
     );
   }
 
-  // --- PERUBAHAN DI SINI ---
+  // --- WIDGETS LAIN TETAP SAMA ---
   Widget _buildRecomendedBanner() {
-    // Warna biru konstan sesuai gambar
-    const Color bannerColor = Color.fromARGB(255, 111, 0, 255); 
-
+    const Color bannerColor = Color.fromARGB(255, 111, 0, 255);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: bannerColor, // Gunakan warna konstan
+          color: bannerColor,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(
@@ -203,7 +298,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-            Image.asset('assets/images/onboarding_image_2.png', width: 100), 
+            Image.asset('assets/images/onboarding_image_2.png', width: 100),
           ],
         ),
       ),
@@ -230,25 +325,12 @@ class _HomeScreenState extends State<HomeScreen> {
         decoration: BoxDecoration(
           color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 5),
-            )
-          ]
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 5))],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              number,
-              style: TextStyle(
-                color: Theme.of(context).textTheme.bodyLarge!.color!,
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            Text(number, style: TextStyle(color: Theme.of(context).textTheme.bodyLarge!.color!, fontSize: 32, fontWeight: FontWeight.bold)),
             const SizedBox(height: 5),
             Text(label, style: TextStyle(color: Theme.of(context).hintColor, fontSize: 16)),
           ],
@@ -257,32 +339,20 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- PERUBAHAN DI SINI ---
   Widget _buildJobCategories(Color primaryColor) {
-    // Warna konstan sesuai gambar
-    final Color designerColor = const Color.fromARGB(255, 3, 88, 179); // Biru
-    final Color managerColor = const Color(0xFF27AE60); // Hijau
-    final Color programmerColor = const Color(0xFF8B4513); // Coklat
-    final Color uiuxColor = const Color.fromARGB(255, 12, 126, 59); // Coklat
-    final Color potoColor = const Color.fromARGB(255, 139, 38, 221); // Coklat
+    final Color designerColor = const Color.fromARGB(255, 3, 88, 179);
+    final Color managerColor = const Color(0xFF27AE60);
+    final Color programmerColor = const Color(0xFF8B4513);
+    final Color uiuxColor = const Color.fromARGB(255, 12, 126, 59);
+    final Color potoColor = const Color.fromARGB(255, 139, 38, 221);
 
-    // Fungsi navigasi
     void _navigateToRecentJobs() {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const RecentJobScreen()),
-      );
+      Navigator.push(context, MaterialPageRoute(builder: (context) => const RecentJobScreen()));
     }
 
     return Column(
       children: [
-        // "More" sekarang akan mengarah ke RecentJobScreen
-        _buildSectionTitle(
-          "Job Categories", 
-          Theme.of(context).textTheme.bodyLarge!.color!, 
-          primaryColor, 
-          _navigateToRecentJobs // <-- Berikan fungsi navigasi
-        ),
+        _buildSectionTitle("Job Categories", Theme.of(context).textTheme.bodyLarge!.color!, primaryColor, _navigateToRecentJobs),
         SizedBox(
           height: 50,
           child: ListView(
@@ -292,8 +362,8 @@ class _HomeScreenState extends State<HomeScreen> {
               _buildCategoryChip("Designer", designerColor, Colors.white, _navigateToRecentJobs),
               _buildCategoryChip("Manager", managerColor, Colors.white, _navigateToRecentJobs),
               _buildCategoryChip("Programmer", programmerColor, Colors.white, _navigateToRecentJobs),
-              _buildCategoryChip("UI/UX Designer", uiuxColor, Colors.white, _navigateToRecentJobs),
-              _buildCategoryChip("Photographer", potoColor, Colors.white, _navigateToRecentJobs),
+              _buildCategoryChip("UI/UX", uiuxColor, Colors.white, _navigateToRecentJobs),
+              _buildCategoryChip("Photo", potoColor, Colors.white, _navigateToRecentJobs),
             ],
           ),
         ),
@@ -310,213 +380,152 @@ class _HomeScreenState extends State<HomeScreen> {
           label: Text(label, style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
           backgroundColor: color,
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: BorderSide.none,
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide.none),
         ),
       ),
     );
   }
 
-
- Widget _buildSectionTitle(String title, Color titleColor, Color primaryColor, [VoidCallback? onMoreTap]) {
+  Widget _buildSectionTitle(String title, Color titleColor, Color primaryColor, [VoidCallback? onMoreTap]) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            title,
-            style: TextStyle(
-              color: titleColor,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          // "More" hanya akan tampil jika 'onMoreTap' tidak null
-          if (onMoreTap != null) 
+          Text(title, style: TextStyle(color: titleColor, fontSize: 20, fontWeight: FontWeight.bold)),
+          if (onMoreTap != null)
             GestureDetector(
               onTap: onMoreTap,
-              child: Text(
-                "More", 
-                style: TextStyle(color: primaryColor, fontSize: 16, fontWeight: FontWeight.bold)
-              ),
+              child: Text("More", style: TextStyle(color: primaryColor, fontSize: 16, fontWeight: FontWeight.bold)),
             ),
         ],
       ),
     );
   }
-  
-  Widget _buildFeaturedJobsList() {
+
+  Widget _buildFeaturedJobsList(List<JobModel> jobs) {
     return SizedBox(
-      height: 200, 
+      height: 200,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: featuredJobs.length,
+        itemCount: jobs.length,
         itemBuilder: (context, index) {
-          final job = featuredJobs[index];
-          return _buildFeaturedJobCard(
-            job['logo']!,
-            job['company']!,
-            job['title']!,
-            job['location']!,
-            job['salary']!,
-            job['isBookmarked']!,
-            () => _toggleBookmark(featuredJobs, index),
-          );
+          final job = jobs[index];
+          return _buildFeaturedJobCard(job);
         },
       ),
     );
   }
 
-  Widget _buildFeaturedJobCard(
-    String logo,
-    String company,
-    String title,
-    String location,
-    String salary,
-    bool isBookmarked,
-    VoidCallback onBookmarkTap,
-  ) {
+  Widget _buildFeaturedJobCard(JobModel job) {
     final Color cardColor = Theme.of(context).cardColor;
     final Color titleColor = Theme.of(context).textTheme.bodyLarge!.color!;
     final Color subtitleColor = Theme.of(context).hintColor;
-    // final Color primaryColor = Theme.of(context).primaryColor;
 
-    return GestureDetector( // <-- 1. BUNGKUS DENGAN INI
-    onTap: () => _navigateToDetail(context), // <-- 2. TAMBAHKAN ONTAP
-    child: Container(
-      width: 250,
-      margin: const EdgeInsets.symmetric(horizontal: 8),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          )
-        ]
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Image.asset(logo, width: 40),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  company,
-                  style: TextStyle(color: subtitleColor, fontSize: 16),
-                  overflow: TextOverflow.ellipsis,
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => AvailableJobsScreen(job: job)),
+        );
+      },
+      child: Container(
+        width: 250,
+        margin: const EdgeInsets.symmetric(horizontal: 8),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 5))]
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CompanyLogoWidget(
+                  logoUrl: job.companyLogoUrl, 
+                  companyName: job.companyName,
+                  size: 50,
                 ),
-              ),
-              IconButton(
-                icon: Icon(
-                  isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                  color: isBookmarked ? Colors.yellow[800] : subtitleColor,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(job.companyName, style: TextStyle(color: subtitleColor, fontSize: 16), overflow: TextOverflow.ellipsis),
                 ),
-                onPressed: onBookmarkTap,
-              ),
-            ],
-          ),
-          const Spacer(),
-          Text(title, style: TextStyle(color: titleColor, fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 5),
-          Text(location, style: TextStyle(color: subtitleColor, fontSize: 14)),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(salary, style: TextStyle(color: subtitleColor, fontSize: 16)),
-              Icon(Icons.arrow_forward_ios_rounded, color: titleColor, size: 16),
-            ],
-          ),
-        ],
-      ),
+                Icon(Icons.bookmark_border, color: subtitleColor),
+              ],
+            ),
+            const Spacer(),
+            Text(job.jobTitle, style: TextStyle(color: titleColor, fontSize: 18, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 5),
+            Text(job.location, style: TextStyle(color: subtitleColor, fontSize: 14)),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(job.salaryRange, style: TextStyle(color: subtitleColor, fontSize: 16)),
+                Icon(Icons.arrow_forward_ios_rounded, color: titleColor, size: 16),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildRecentJobsList() {
+  Widget _buildRecentJobsList(List<JobModel> jobs) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0),
       child: Column(
-        children: recentJobs.asMap().entries.map((entry) {
-          int index = entry.key;
-          Map<String, dynamic> job = entry.value;
-          return _buildRecentJobCard(
-            job['logo']!,
-            job['title']!,
-            job['company']!,
-            job['salary']!,
-            job['isBookmarked']!,
-            () => _toggleBookmark(recentJobs, index),
-          );
-        }).toList(),
+        children: jobs.map((job) => _buildRecentJobCard(job)).toList(),
       ),
     );
   }
 
-  Widget _buildRecentJobCard(
-    String logo,
-    String title,
-    String company,
-    String salary,
-    bool isBookmarked,
-    VoidCallback onBookmarkTap,
-  ) {
+  Widget _buildRecentJobCard(JobModel job) {
     final Color cardColor = Theme.of(context).cardColor;
     final Color subtitleColor = Theme.of(context).hintColor;
     final Color primaryColor = Theme.of(context).primaryColor;
 
-    return GestureDetector( // <-- 1. BUNGKUS DENGAN INI
-    onTap: () => _navigateToDetail(context), // <-- 2. TAMBAHKAN ONTAP
-    child: Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 5,
-            offset: const Offset(0, 3),
-          )
-        ]
-      ),
-      child: Row(
-        children: [
-          Image.asset(logo, width: 45),
-          const SizedBox(width: 15),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: TextStyle(color: primaryColor, fontSize: 16, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 5),
-                Text(company, style: TextStyle(color: subtitleColor, fontSize: 14)),
-                const SizedBox(height: 5),
-                Text(salary, style: TextStyle(color: subtitleColor, fontSize: 14)),
-              ],
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => AvailableJobsScreen(job: job)),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5, offset: const Offset(0, 3))]
+        ),
+        child: Row(
+          children: [
+            CompanyLogoWidget(
+              logoUrl: job.companyLogoUrl, 
+              companyName: job.companyName,
+              size: 50,
             ),
-          ),
-          IconButton(
-            icon: Icon(
-              isBookmarked ? Icons.bookmark : Icons.bookmark_border_rounded,
-              color: isBookmarked ? Colors.yellow[800] : subtitleColor,
-              size: 28,
+            const SizedBox(width: 15),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(job.jobTitle, style: TextStyle(color: primaryColor, fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 5),
+                  Text("${job.companyName} • ${job.location}", style: TextStyle(color: subtitleColor, fontSize: 14)),
+                  const SizedBox(height: 5),
+                  Text(job.salaryRange, style: TextStyle(color: subtitleColor, fontSize: 14)),
+                ],
+              ),
             ),
-            onPressed: onBookmarkTap,
-          ),
-        ],
-      ),
+            Icon(Icons.bookmark_border_rounded, color: subtitleColor, size: 28),
+          ],
+        ),
       ),
     );
   }

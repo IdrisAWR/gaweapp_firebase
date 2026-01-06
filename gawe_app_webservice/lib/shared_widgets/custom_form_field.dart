@@ -1,16 +1,18 @@
-// lib/custom_form_field.dart
+// lib/shared_widgets/custom_form_field.dart
 import 'package:flutter/material.dart';
 
 class CustomFormField extends StatelessWidget {
   final String hintText;
   final bool obscureText;
   final IconData? icon;
+  final TextEditingController? controller; // 1. Kita tambahkan variabel controller
 
   const CustomFormField({
     Key? key,
     required this.hintText,
     this.obscureText = false,
     this.icon,
+    this.controller, // 2. Kita masukkan ke constructor
   }) : super(key: key);
 
   @override
@@ -28,6 +30,7 @@ class CustomFormField extends StatelessWidget {
         ],
       ),
       child: TextField(
+        controller: controller, // 3. Kita hubungkan controller ke TextField
         obscureText: obscureText,
         decoration: InputDecoration(
           hintText: hintText,

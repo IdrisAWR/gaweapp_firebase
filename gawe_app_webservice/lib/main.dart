@@ -3,9 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:coba_1/features/auth/splash_screen.dart';
 import 'package:coba_1/core/theme_provider.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:coba_1/core/app_theme.dart';
+import 'firebase_options.dart'; 
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // 2. PENTING: Tambahkan options ini
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  
   runApp(
     ChangeNotifierProvider(
       create: (context) => ThemeProvider(),
@@ -24,16 +33,15 @@ class MyApp extends StatelessWidget {
         return MaterialApp(
           title: 'Gawee App',
           debugShowCheckedModeBanner: false,
-          themeMode: themeProvider.themeMode, 
+          themeMode: themeProvider.themeMode,
           
-          // --- PERUBAHAN DI SINI ---
           theme: AppTheme.lightTheme(
-            themeProvider.primaryColor, // Warna ungu konstan
-            themeProvider.lightScaffoldColor, // Warna latar dinamis
+            themeProvider.primaryColor, 
+            themeProvider.lightScaffoldColor, 
           ),
           darkTheme: AppTheme.darkTheme(
-            themeProvider.primaryColor, // Warna ungu konstan
-          ), 
+            themeProvider.primaryColor, 
+          ),
           
           home: const SplashScreen(),
         );

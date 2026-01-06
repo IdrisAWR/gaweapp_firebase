@@ -1,7 +1,7 @@
-// lib/find_job_screen.dart
+// lib/features/job/find_job_screen.dart
 import 'package:flutter/material.dart';
-import 'package:coba_1/shared_widgets/app_drawer.dart'; // Impor AppDrawer Anda
-import 'company_list_screen.dart';
+import 'package:coba_1/shared_widgets/app_drawer.dart';
+import 'package:coba_1/features/job/recent_job_screen.dart'; // Import ini
 import 'package:coba_1/features/resume/resume_screen.dart';
 
 class FindJobScreen extends StatefulWidget {
@@ -12,22 +12,38 @@ class FindJobScreen extends StatefulWidget {
 }
 
 class _FindJobScreenState extends State<FindJobScreen> {
-  // Key untuk mengontrol Scaffold (agar tombol '...' bisa buka drawer)
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  
+  // 1. Controller untuk Input Pencarian
+  final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _locationController = TextEditingController();
 
-  // Daftar dummy untuk popular searches
   final List<String> popularSearches = [
-    "Software developer fresher",
-    "Worker From Home",
-    "Driver",
-    "hr frsher",
-    "softwere testing",
-    "seles executive",
-    "business analyst",
-    "receptionist",
-    "data analyst",
-    "seo executive",
+    "Software Engineer",
+    "Flutter Developer",
+    "UI/UX Designer",
+    "Data Analyst",
+    "Product Manager",
   ];
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _locationController.dispose();
+    super.dispose();
+  }
+
+  // Fungsi untuk Navigasi Pencarian
+  void _performSearch(String query) {
+    if (query.isNotEmpty) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => RecentJobScreen(initialQuery: query), // Kirim query
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,11 +53,11 @@ class _FindJobScreenState extends State<FindJobScreen> {
 
     return Scaffold(
       key: _scaffoldKey,
-      drawer: const AppDrawer(), // Hubungkan drawer
+      drawer: const AppDrawer(),
       appBar: AppBar(
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: titleColor),
-          onPressed: () => Navigator.of(context).pop(), // Tombol kembali
+          onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
           "Find Job",
@@ -53,7 +69,7 @@ class _FindJobScreenState extends State<FindJobScreen> {
           IconButton(
             icon: Icon(Icons.more_vert, color: subtitleColor),
             onPressed: () {
-              _scaffoldKey.currentState?.openDrawer(); // Buka drawer
+              _scaffoldKey.currentState?.openDrawer();
             },
           )
         ],
@@ -80,6 +96,7 @@ class _FindJobScreenState extends State<FindJobScreen> {
               child: Column(
                 children: [
                   TextField(
+                    controller: _searchController, // Pasang controller
                     decoration: InputDecoration(
                       icon: Icon(Icons.search, color: subtitleColor),
                       hintText: "job title, keywords, or company",
@@ -89,9 +106,10 @@ class _FindJobScreenState extends State<FindJobScreen> {
                   ),
                   Divider(color: Colors.grey.shade200),
                   TextField(
+                    controller: _locationController,
                     decoration: InputDecoration(
                       icon: Icon(Icons.location_on, color: subtitleColor),
-                      hintText: "Enter city or locality",
+                      hintText: "Enter city or locality (Optional)",
                       hintStyle: TextStyle(color: subtitleColor.withOpacity(0.7)),
                       border: InputBorder.none,
                     ),
@@ -106,11 +124,7 @@ class _FindJobScreenState extends State<FindJobScreen> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () {
-                  // Navigasi ke halaman Company List
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const CompanyListScreen()),
-                  );
+                  _performSearch(_searchController.text);
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryColor,
@@ -142,10 +156,13 @@ class _FindJobScreenState extends State<FindJobScreen> {
             ),
             const SizedBox(height: 20),
             Wrap(
-              spacing: 10.0, // Jarak horizontal antar chip
-              runSpacing: 10.0, // Jarak vertikal antar baris chip
+              spacing: 10.0,
+              runSpacing: 10.0,
               children: popularSearches.map((search) {
-                return _buildSearchChip(search, subtitleColor);
+                return GestureDetector(
+                  onTap: () => _performSearch(search), // Klik chip langsung cari
+                  child: _buildSearchChip(search, subtitleColor),
+                );
               }).toList(),
             ),
             const SizedBox(height: 30),
@@ -153,7 +170,6 @@ class _FindJobScreenState extends State<FindJobScreen> {
             // --- Create Resume Link ---
             GestureDetector(
               onTap: () {
-                // Navigasi ke halaman Resume
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const ResumeScreen()),
@@ -183,7 +199,6 @@ class _FindJobScreenState extends State<FindJobScreen> {
     );
   }
 
-  // Widget helper untuk chip
   Widget _buildSearchChip(String label, Color color) {
     return Chip(
       avatar: Icon(Icons.search, color: color, size: 18),
